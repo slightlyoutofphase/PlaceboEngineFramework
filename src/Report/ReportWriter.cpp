@@ -103,7 +103,7 @@ void ReportWriter::write_status(const telemetry::Telemetry& a_telemetry,
 
   text += field("Frames witnessed:", grouped(frames)) + "\n";
   text +=
-      field("Allocations witnessed:", grouped(allocations) + " (pass-through, unmodified)") + "\n";
+          field("Allocations witnessed:", grouped(allocations) + " (pass-through, unmodified)") + "\n";
   text += field("Game state altered:", std::format("{} times", grouped(operations))) + "\n";
   text += field("Exceptions witnessed:", grouped(exceptions)) + "\n";
   text += field("Alibis filed:", grouped(alibis)) + "\n";
