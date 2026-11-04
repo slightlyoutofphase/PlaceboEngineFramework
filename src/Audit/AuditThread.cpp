@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "Diagnostics/Format.hpp"
 #include "Diagnostics/Log.hpp"
 #include "Diagnostics/Telemetry.hpp"
 
@@ -92,8 +93,9 @@ void AuditThread::audit_once() {
       log::info("this period, PEF did nothing in {:.3} µs per witnessed call. efficiently.",
                 static_cast<double>(period_ns) / 1000.0 / static_cast<double>(period_calls));
     }
-    log::info("witnessed so far: {:,} frames, {:,} allocations; game state altered: {} times.",
-              frames - last_frames_, allocations - last_allocations_, operations);
+    log::info("witnessed so far: {} frames, {} allocations; game state altered: {} times.",
+              format::grouped(frames - last_frames_),
+              format::grouped(allocations - last_allocations_), operations);
     last_timed_calls_ = calls;
     last_ns_ = ns;
     last_frames_ = frames;

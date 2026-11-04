@@ -28,10 +28,14 @@ using telemetry::WitnessClass;
 //   RE::MemoryManager::Reallocate(void*, void*, std::size_t, std::int32_t, bool) -> void*
 //   RE::MemoryManager::Deallocate(void*, void*, bool) -> void
 //   RE::BSInputDeviceManager::PollInputDevices(void*, float) -> void
-using AllocationSignature = void* (*)(RE::MemoryManager*, std::size_t, std::int32_t, bool);
-using ReallocationSignature = void* (*)(RE::MemoryManager*, void*, std::size_t, std::int32_t, bool);
-using DeallocationSignature = void (*)(RE::MemoryManager*, void*, bool);
-using FrameSignature = void (*)(RE::BSInputDeviceManager*, float);
+//
+// They are genuine function types, not function-pointer types: WitnessSlot constrains
+// its Signature parameter to function types (std::is_function_v) and derives its own
+// thunk_type pointer internally, so a pointer here would fail the constraint outright.
+using AllocationSignature = void*(RE::MemoryManager*, std::size_t, std::int32_t, bool);
+using ReallocationSignature = void*(RE::MemoryManager*, void*, std::size_t, std::int32_t, bool);
+using DeallocationSignature = void(RE::MemoryManager*, void*, bool);
+using FrameSignature = void(RE::BSInputDeviceManager*, float);
 
 // Pool capacities: seats in the manifest. Capacity deliberately exceeds the budget so
 // that the engine, not the installer, decides which hot call sites actually board.

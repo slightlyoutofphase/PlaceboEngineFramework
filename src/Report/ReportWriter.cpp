@@ -11,18 +11,19 @@
 #include "SKSE/SKSE.h"
 
 #include "BuildInfo.hpp"
+#include "Diagnostics/Format.hpp"
 #include "REL/Module.h"
 
 namespace pef::report {
 
 namespace {
 
+using pef::format::grouped;
+
 /// The report is UTF-8 with a byte-order mark, so that Notepad — the crash-log reader
 /// of record for this product category — renders the µ and the ∞ correctly. Half of
 /// professionalism is knowing your audience; the other half is the BOM.
 constexpr std::string_view byte_order_mark{"\xEF\xBB\xBF"};
-
-[[nodiscard]] std::string grouped(std::uint64_t a_value) { return std::format("{:,}", a_value); }
 
 /// Mean microseconds per call, or "n/a" when there is nothing to divide. The median is
 /// always n/a and always will be: the median of zero interventions is undefined, and

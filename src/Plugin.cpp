@@ -1,9 +1,5 @@
 #include "Plugin.hpp"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-
 #include <array>
 #include <cstdlib>
 #include <filesystem>
@@ -11,20 +7,34 @@
 #include <string>
 #include <utility>
 
+// CommonLibSSE headers are written against their prefix header; the SKSE umbrella
+// includes it first, so it precedes every individual CommonLib include in this file.
+// It must also precede any Windows API include: REX/W32/BASE.h — parsed as part of this
+// umbrella — asserts that no Windows header was included before it, and
+// Crash/AlibiHandler.h (below) pulls <Windows.h> for its own types. The plugin-wide
+// precompiled header force-includes the prefix ahead of every translation unit; the
+// explicit ordering keeps this file correct even where the PCH is not in play.
+#include "SKSE/SKSE.h"
+
+#include "REL/Module.h"
+
 #include "Audit/AuditThread.hpp"
 #include "BuildInfo.hpp"
 #include "Config/Settings.hpp"
 #include "Crash/AlibiHandler.hpp"
+#include "Diagnostics/Format.hpp"
 #include "Diagnostics/Log.hpp"
 #include "Diagnostics/Telemetry.hpp"
 #include "Hooks/Installer.hpp"
 #include "Report/ReportWriter.hpp"
 
-// CommonLibSSE headers are written against their prefix header; the SKSE umbrella
-// includes it first, so it precedes every individual CommonLib include in this file.
-#include "SKSE/SKSE.h"
-
-#include "REL/Module.h"
+// Path discovery needs the Win32 surface (MAX_PATH, GetModuleFileNameW). CommonLib has
+// been included above, which is the order its include-order assertion demands; AlibiHandler.h
+// already pulled <Windows.h> behind these same guards, so the include below is idempotent —
+// it exists so the dependency is stated where it is used.
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 namespace pef {
 
@@ -101,8 +111,8 @@ void finalize() {
     instance.audit.stop();
     instance.report.write_status(telemetry::the(), instance.installation, instance.settings, true);
     crash::AlibiHandler::uninstall();
-    log::info("shutdown report finalized: {:,} frames witnessed, 0 game state altered.",
-              telemetry::the().frames_witnessed.load(std::memory_order_relaxed));
+    log::info("shutdown report finalized: {} frames witnessed, 0 game state altered.",
+              format::grouped(telemetry::the().frames_witnessed.load(std::memory_order_relaxed)));
   });
 }
 

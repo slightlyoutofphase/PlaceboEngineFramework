@@ -12,6 +12,7 @@
 #include <format>
 
 #include "BuildInfo.hpp"
+#include "Diagnostics/Format.hpp"
 #include "Diagnostics/Telemetry.hpp"
 
 namespace pef::crash {
@@ -64,11 +65,11 @@ void file_alibi(std::uint32_t a_code) noexcept {
       "\n"
       "Exception code:   0x{:08X}\n"
       "Alibi filed:      #{} (priority 1 — ahead of every other crash logger)\n"
-      "Frames witnessed: {:,}\n"
+      "Frames witnessed: {}\n"
       "This statement was prepared before the crash, which is what an alibi is.\n",
       operating ? "dormant" : "UNDER INVESTIGATION — see PEF_Incident.txt",
       operations == 0 ? "0.000 ms" : "nonzero, unquantified, and deeply embarrassing", a_code,
-      alibis, frames);
+      alibis, format::grouped(frames));
   *out.out = '\0';
 
   const auto file = ::CreateFileW(alibi_path.data(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
@@ -94,7 +95,9 @@ long WINAPI AlibiHandler::on_exception(PEXCEPTION_POINTERS a_info) noexcept {
   if (a_info != nullptr && a_info->ExceptionRecord != nullptr) {
     const auto code = static_cast<std::uint32_t>(a_info->ExceptionRecord->ExceptionCode);
     const auto now = ::GetTickCount64();
-    const auto last = last_filed_ms.load(std::memory_order_relaxed);
+    // Writable by compare_exchange_strong: the operation stores the observed value
+    // into it when the comparison fails, so it cannot be const.
+    auto last = last_filed_ms.load(std::memory_order_relaxed);
     if (is_fatal(code) && (last == 0 || now - last >= refactory_period_ms)) {
       if (last_filed_ms.compare_exchange_strong(last, now, std::memory_order_relaxed,
                                                 std::memory_order_relaxed)) {
