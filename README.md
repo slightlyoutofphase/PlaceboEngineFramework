@@ -1,269 +1,347 @@
 # Placebo Engine Framework (PEF)
 
-*"The first fully instrumented Skyrim engine mod that provably does nothing."*
+**Engine instrumentation, operational integrity, and documented non-intervention for Skyrim SE, AE, and VR.**
 
-**Version 4.2.0.1b** — released last Tuesday. (The changelog tops out at 2.1. The version
-number tops out at 4.2.0.1b. Neither is apologizing.)
+*"If nothing changes, everything is working as intended."*
 
-PEF is a legitimate, professionally engineered CommonLibSSE-NG plugin — trampolines,
-relocations, atomic counters, exception handlers, an audit thread — and its entire value
-proposition is that it changes **zero bytes of game state, and can prove it**.
+**Current version:** `4.2.0.1b`  
+**Operational status:** Dormant by design.
 
-It is the honest mirror of every AI-generated "Crash Guard / Stability+ / FPS Optimizer"
-DLL currently flooding the mod ecosystem: same architecture, same confident marketing,
-zero claims about reality. The only thing left exposed is the difference between the
-marketing and the machine.
+Placebo Engine Framework is an SKSE plugin built with CommonLibSSE-NG. It installs pass-through witnesses at selected engine call sites, records what those witnesses observe, and continuously audits its own commitment to making no gameplay-state interventions.
 
----
+PEF does not improve frame rates, optimize memory allocation, prevent crashes, or correct engine behavior. Those activities would introduce changes to the system under observation, placing them outside the framework's operational mandate.
 
-## What it actually does (all technically real)
+Instead, PEF delivers something more narrowly defined: **a running, timestamped account of how consistently it has refrained from helping.**
 
-- **Hooks 47 hot engine call sites** via `SKSE::GetTrampoline().write_call<5>()` — the
-  input poll that `Main::Update` performs every frame, the memory manager, the works.
-  Every hook calls the original, passes every argument and the result through
-  unmodified, and increments a counter called `frames_witnessed`.
+The distinction is important. Simply doing nothing requires no software. *Verifying* that nothing has been done requires an architecture.
 
-- **Self-auditing worker thread**: every 250 ms it samples
-  `std::atomic<std::uint64_t> operations_performed` and asserts it is still `0`. If the
-  plugin is ever detected doing *something*, it writes an incident report and stops
-  doing nothing immediately. This is called *Operational Integrity*.
+## Features
 
-- **Measured overhead**: `std::chrono::steady_clock` around each hook, aggregated into
-  the log and the report — "this period, PEF did nothing in 0.4 µs per witnessed call.
-  efficiently." The instrumentation cost is measured, reported, and owned. Nobody else
-  ships their overhead; we ship ours, because ours is the product.
+### Engine Witness Network
 
-- **First responder alibi**: installs `AddVectoredExceptionHandler` at priority 1 and
-  returns `EXCEPTION_CONTINUE_SEARCH`, so it executes *before* Crash Logger or
-  Trainwreck on every crash. Every crash now contains, in `PEF_Alibi.txt`:
+PEF can instrument **up to 47 engine call sites** using SKSE's trampoline interface and five-byte `CALL` replacements. The witness installer searches the executable's code section for calls to relocation-resolved engine functions, including memory allocation, reallocation, deallocation, and input polling.
 
-  ```
-  PEF status at time of crash: dormant.
-  Time spent altering game state: 0.000 ms.
-  Suspects: everyone else.
-  ```
+Each witness forwards the original arguments to the original function and returns its result unchanged. It also records invocation counts and elapsed time. PEF considers observation a responsibility, not permission to intervene.
 
-  This is the Crash Guard parody distilled: instead of claiming to prevent crashes and
-  blaming other DLLs, PEF formally establishes an alibi.
+The number **47** is a compile-time capacity limit, not a promise that every runtime will offer 47 eligible locations. Actual installations are reported without rounding up. The limit itself is non-negotiable.
 
-- **Shutdown report** written to `My Games/Skyrim Special Edition/PEF_Report.txt` — and
-  refreshed every 10 seconds all session, so it is current even when the game dies
-  without the courtesy of a shutdown:
+### Operational Integrity
 
-  ```
-  Frames witnessed:            1,204,551
-  Allocations witnessed:       58,206,744 (pass-through, unmodified)
-  Game state altered:                 0 times
-  Median intervention time:           n/a
-  Mean time between incidents:        ∞
-  Uptime SLA:                         100% of crashes were caused by other plugins.
-                                     Verified by us.
-  ```
+An independent audit thread samples PEF's internal `operations_performed` counter every **250 ms** by default. The accepted value is **zero**.
 
-- **CommonLibSSE-NG flex**: the witness network is discovered by scanning the running
-  image for real call sites, pinned by relocations that resolve on SE, AE, and VR.
-  Porting to VR required zero changes, which we listed as a feature anyway.
+If the counter becomes nonzero, PEF records an Operational Integrity incident in `PEF_Incident.txt` and suspends active witness instrumentation for the remainder of the session. Installed hooks continue forwarding calls to their original targets.
 
-## The proof-of-nothing pipeline
+This safeguard is intentionally uncompromising: if an intervention is registered, witness instrumentation is suspended for the rest of the session. Monitoring the suspension, naturally, continues.
 
-```
-        engine call site            ┌──────────────────────────────────────────┐
-   ┌────────────────────┐           │  audit thread (250 ms)                   │
-   │  E8 CALL rel32     │           │                                          │
-   │        │           │           │  assert operations_performed == 0        │
-   │        ▼           │           │        │                                 │
-   │  write_call<5>     │           │        ├─ still 0 ──► refresh report     │
-   │        │           │           │        │              log status          │
-   │        ▼           │           │        └─ nonzero ►  incident report     │
-   │  witness thunk     │           │                     suspend witnessing   │
-   │  ┌──────────────┐  │           │                     stop doing nothing   │
-   │  │ call orig.   │  │           │                     immediately          │
-   │  │ time it      │  │           └──────────────────────────────────────────┘
-   │  │ count it      │ │
-   │  │ alter nothing │ │
-   └──┴──────────────┴──┘
+The audit verifies PEF's own registered operations. It is not an independent scan of all Skyrim memory, and it makes no claims about changes introduced elsewhere in the process. PEF's standards are strict, but its jurisdiction is limited.
+
+### Incident Alibi System
+
+PEF registers a first-priority Windows vectored exception handler using `AddVectoredExceptionHandler(1, ...)`. For selected exception codes associated with serious failures, it attempts to write `PEF_Alibi.txt` before returning `EXCEPTION_CONTINUE_SEARCH` so normal exception processing can continue.
+
+A typical alibi begins:
+
+```text
+PEF status at time of crash: dormant.
+Time spent altering game state: 0.000 ms.
+Suspects: everyone else.
 ```
 
-## The Number 47
+The filing also includes the exception code, alibi sequence number, and number of frames witnessed. Alibi creation is rate-limited to avoid redundant filings during a sequence of exceptions.
 
-47 is a marketing constant with the full protection of engineering discipline. It lives
-in `src/BuildInfo.hpp` as `hook_budget`, the installer treats it as a hard budget, and
-it must never change — the README has already quoted it, and this paragraph is now load
-bearing.
+**PEF does not suppress, repair, or diagnose the exception.** The alibi is a record of the framework's declared state, not a determination of fault. Responsibility for a crash remains with the appropriate investigative authorities. PEF has already submitted its statement.
 
-The engineering that fills the budget is honest about what it finds: call sites are
-discovered by reading the code section of the running executable and locating real
-five-byte `E8 rel32` CALL instructions whose targets are the engine's allocator and
-input-poll functions (pinned by CommonLibSSE's own relocation tables — including VR
-1.4.15). If the engine offers fewer hot sites than the budget, the report says so. The
-marketing will not; that is what marketing is for.
+### Telemetry and Session Reports
 
-## The configuration
+PEF tracks witnessed frame-poll calls, memory-management calls, exceptions, alibi filings, and the elapsed duration of witnessed calls. These counters are summarized in `PEF_Report.txt`, refreshed **every 10 seconds** by default and finalized during normal shutdown.
 
-Ships with a 60-line INI — `Data/SKSE/PlaceboEngineFramework.ini` — every key parsed,
-validated, and range-checked:
+An illustrative excerpt:
+
+```text
+Frames witnessed:                 1,204,551
+Allocations witnessed:            58,206,744 (pass-through, unmodified)
+Game state altered:               0 times
+Median intervention time:         n/a (there were no interventions)
+Mean time between incidents:      ∞
+Uptime SLA:                       100% of crashes were caused by other plugins.
+                                  Verified by us.
+```
+
+The report's `Game state altered` field reflects PEF's internal operation counter. The more expansive assertions in its service-level declaration are provided by PEF's own reporting department, which has not requested outside review.
+
+Witness timings include the original engine call as well as PEF's instrumentation; they should not be interpreted as an isolated measurement of plugin overhead. The time was measured correctly. Whether the time was well spent is outside the scope of telemetry.
+
+### Runtime Coverage
+
+PEF uses CommonLibSSE-NG relocation identifiers and runtime-aware address resolution to target Skyrim Special Edition, Anniversary Edition, and Skyrim VR. Witness coverage is determined at runtime and may vary with the executable.
+
+Unsupported or undiscovered call sites are not replaced. A smaller witness network is still a valid witness network. PEF declines to invent coverage merely to meet a target.
+
+## How it works
+
+```text
+    Skyrim engine call site
+               |
+               v
+       Trampoline witness
+               |
+       +-------+--------+
+       |                |
+       v                v
+  Call original    Record telemetry
+  unmodified       (count + time)
+       |                |
+       v                v
+  Return result      Audit thread
+  unmodified         every 250 ms
+                         |
+                 operations_performed?
+                    /          \
+                   0          nonzero
+                   |             |
+             Refresh status  Write incident
+             and continue    Suspend witnessing
+```
+
+The design separates three responsibilities:
+
+1. **Witnessing:** observe selected engine calls and preserve their behavior.
+2. **Auditing:** confirm the internal intervention counter remains at its required value.
+3. **Reporting:** retain an account of both, whether anyone requested one or not.
+
+PEF uses real trampoline patches, atomic counters, a dedicated audit thread, and Windows exception handling. The absence of game improvements is a design objective, not a shortcut in implementation.
+
+## Configuration
+
+The configuration file is located at `Data/SKSE/PlaceboEngineFramework.ini`.
 
 ```ini
 [Memory]
-; OptimizeAllocations — valid values: 0 or 1. Both do nothing.
-; The setting exists so you feel involved.
 OptimizeAllocations=0
 
 [Threading]
-WorkerThreads=8   ; Parsed, validated, then cherished. Not used.
+WorkerThreads=8
 
 [Culling]
-AggressiveCulling=0  ; If 1, culls nothing slightly faster.
+AggressiveCulling=0
+
+[Product]
+EnablePEF=1
+Profile=Balanced
+
+[Instrumentation]
+AuditIntervalMs=250
+ReportRefreshSeconds=10
+StatusLogSeconds=30
 ```
 
-Unknown keys are not rejected; they are logged as *acknowledged* — by name, in the log,
-so that you know that PEF knows that you tried. Three profiles ship in
-`resources/profiles/` — **Performance**, **Balanced**, **Quality** — which are
-byte-identical. This is called *marketing parity*, and it is enforced by the build
-system: if any profile diverges, the build fails before a difference can ship.
+Every recognized setting is parsed and validated. What happens after validation depends on the setting's responsibilities.
 
-The `[Instrumentation]` section is the one exception: the audit interval, the report
-refresh period, and the status line cadence genuinely work. The product does nothing;
-the instrumentation is how it proves that. Confusing the two is how other mods end up on
-the Crash Guard pile.
+| Setting | Accepted values | Effect |
+| --- | --- | --- |
+| `OptimizeAllocations` | `0` or `1` | Records the selected allocation-optimization policy. No allocator behavior is changed. |
+| `WorkerThreads` | `1`–`64` | Retains the requested worker-thread allocation. No additional workers are created for gameplay optimization. |
+| `AggressiveCulling` | `0` or `1` | Records the selected culling policy. No objects are culled by PEF. |
+| `EnablePEF` | `0` or `1` | Records the requested product state. Neither value changes runtime behavior. |
+| `Profile` | `Performance`, `Balanced`, `Quality` | Selects the named configuration profile. All three have identical contents. |
+| `AuditIntervalMs` | `50`–`60000` | Sets the operational audit interval in milliseconds. |
+| `ReportRefreshSeconds` | `1`–`600` | Sets the status-report refresh interval in seconds. |
+| `StatusLogSeconds` | `1`–`3600` | Sets the periodic log interval in seconds. |
+
+Unknown keys are not rejected. They are **acknowledged** in the log. This confirms that the requested setting was received, even when PEF has no particular plans for it.
+
+### Performance, Balanced, and Quality
+
+PEF ships with three profiles in `resources/profiles/`:
+
+- **Performance** — for users who prioritize performance.
+- **Balanced** — for users who prefer a balanced configuration.
+- **Quality** — for users who prioritize quality.
+
+The profile files are byte-identical. This is an enforced compatibility requirement: the `marketing_parity` build target fails if any profile differs from the others.
+
+Choosing a profile is therefore safe. No unexpected changes in performance, quality, or behavior can result from the selection. Users are encouraged to choose carefully nonetheless.
+
+The `[Instrumentation]` settings are different: they genuinely control auditing and reporting. They do not change the engine, but they do change how often PEF documents its decision not to.
 
 ## Requirements
 
-- **SKSE** (Skyrim Script Extender)
-- **Address Library** — all runtime variants
-- **Null Core** — a separate 0 KB dependency mod containing only a README
-  (`resources/null-core/` in this repository). PEF refuses to load without it; this
-  feature is called *Dependency Integrity*
-- One load order slot. The slot *is* the performance cost.
+- **Skyrim SE, AE, or VR**, with a compatible SKSE installation.
+- **Address Library** appropriate for the selected runtime.
+- **Null Core**, the mandatory resource-only dependency supplied in `resources/null-core/`.
+
+### Null Core and Dependency Integrity
+
+Null Core consists of a README and no executable code, scripts, or runtime assets. Its operational footprint is zero. Its administrative importance is considerably greater.
+
+At startup, PEF checks for a Null Core manifest at one of the following locations:
+
+```text
+Data/NullCore/README.md
+Data/NullCore/README.txt
+```
+
+If neither file exists, PEF refuses to initialize. This check is known as **Dependency Integrity**.
+
+Null Core does not need to perform any work to satisfy the dependency requirement. Presence is sufficient; activity would be a scope expansion.
 
 ## Installation
 
-1. Install SKSE, Address Library, and Null Core.
-2. Copy `PlaceboEngineFramework.dll` to `Data/SKSE/Plugins/`.
-3. Optionally copy `resources/PlaceboEngineFramework.ini` to `Data/SKSE/`.
-4. Play. Nothing will happen. That is correct behavior, and it is monitored.
+1. Install the appropriate SKSE and Address Library for your game runtime.
+2. Install Null Core so that `Data/NullCore/README.md` exists in the game directory.
+3. Place `PlaceboEngineFramework.dll` in `Data/SKSE/Plugins/`.
+4. Optionally place `resources/PlaceboEngineFramework.ini` at `Data/SKSE/PlaceboEngineFramework.ini`.
+5. Launch the game through SKSE.
+
+Successful installation should not produce a visible gameplay change. Check the SKSE log and `PEF_Report.txt` for evidence that PEF has initialized and is maintaining its non-intervention policy.
+
+Removing the DLL also produces no intended gameplay change. It does, however, terminate PEF's ability to document that outcome, which is not the same thing.
+
+## Reports and diagnostics
+
+PEF writes its reports to the game's user-data directory, normally under `Documents/My Games/<game>/`. If SKSE's log-directory location is unavailable, the plugin falls back to the game directory.
+
+| File | Purpose |
+| --- | --- |
+| `PEF_Report.txt` | Periodic telemetry, witness coverage, configuration, and final session status. |
+| `PEF_Alibi.txt` | Best-effort non-intervention statement for selected exceptions. |
+| `PEF_Incident.txt` | Operational Integrity failure record, created if an intervention is registered. |
+
+`PEF_Report.txt` is refreshed during play rather than only at shutdown. This provides a recent account of the framework's activities even when a session ends without requesting a final report.
+
+The absence of an alibi does not establish the absence of a crash. The presence of an alibi does not establish the cause. PEF's documentation is extensive, but it is not clairvoyant.
 
 ## FAQ
 
-> **Q: My FPS didn't change.**
-> A: Correct.
+**Will PEF increase my FPS?**
 
-> **Q: Will this fix my crashes?**
-> A: No, but it will be present when they happen — with documentation, an alibi, and a
-> measured self-time. Honestly, that's more than most.
+No. There is no frame-rate improvement mechanism. If your FPS is unchanged, the relevant acceptance criterion has been met.
 
-> **Q: Is it compatible with everything?**
-> A: Everything, including itself. Incompatible with nothing except scrutiny.
+**Will it fix crashes?**
 
-> **Q: Where is the MCM?**
-> A: The 2.1 toggle ("Enable PEF") lives in the INI. Toggling it off does nothing,
-> because that is the product.
+No. It can attempt to document selected exception events, but exception recovery is not implemented. Preventing a crash would compromise the incident-reporting workflow.
 
-> **Q: Why does the report say the median intervention time is n/a?**
-> A: The median of zero interventions is undefined. Reporting it as anything else would
-> be the first actual lie in this file.
+**Does PEF really do nothing?**
 
-## Changelog
+It does quite a lot of work to avoid making gameplay-state interventions. It installs hooks, maintains counters, runs an audit thread, and writes reports. None of those activities is intended to optimize or repair Skyrim. PEF is very busy within its carefully limited remit.
 
-> **1.0** — Initial release.
-> **1.1** — Fixed a crash in the audit thread. The plugin was doing something after
-> all. Removed.
-> **1.2** — Removed the fix from 1.1. It was also doing something.
-> **2.0** — Rewritten from scratch to do nothing more efficiently.
-> **2.1** — Added one toggle: "Enable PEF". Toggling it off does nothing, because that
-> is the product.
-> **4.2.0.1b** — Current. The number is seniority, not scope. Released last Tuesday.
+**Why is the witness count lower than 47?**
+
+Forty-seven is the maximum registration budget. The actual count depends on suitable call sites found in the active runtime. Missing opportunities are reported as missing, not quietly filled with imaginary witnesses.
+
+**Does `EnablePEF=0` disable the plugin?**
+
+No. The setting is recognized and recorded, but does not currently alter runtime behavior. Both values are supported with complete functional parity.
+
+**Which configuration profile should I use?**
+
+All three are supported. Performance, Balanced, and Quality are byte-identical, so the decision is primarily a matter of preference. PEF cannot make that decision for you.
+
+**Why is median intervention time listed as `n/a`?**
+
+The median of zero observed interventions is undefined. Reporting a numerical value would require an intervention, which would then invalidate the premise of the measurement.
+
+**Is PEF compatible with every other plugin?**
+
+PEF does not intentionally change engine behavior, but it does patch executable call sites and register an exception handler. Compatibility therefore cannot be guaranteed universally. It documents its own activity rather than making promises on behalf of unrelated software.
+
+**Where is the MCM?**
+
+Configuration is provided through the INI file. A separate in-game menu is not included. Adding one would substantially increase the number of things PEF does.
 
 ## Building from source
 
-Standard CMake + MSVC. **No vcpkg** — the dependency surface (spdlog, DirectXTK,
-rapidcsv) is fetched by CMake itself via `cmake/Dependencies.cmake` and satisfied
-through `CMAKE_FIND_PACKAGE_REDIRECTS_DIR`, which is the documented mechanism for
-feeding a `find_package()` tree from in-tree FetchContent targets.
+PEF uses **CMake, MSVC, C++23, and CommonLibSSE-NG**. Dependencies are resolved through the repository's CMake configuration; vcpkg is not required.
 
-Requirements: Visual Studio 2022 (MSVC v143), CMake 3.25+, git, and network access at
-configure time (first configure only; everything is cached afterwards).
+### Prerequisites
 
-```bash
-git clone --recursive <this repository> pef
-cd pef
+- Windows x64.
+- Visual Studio 2022 or 2026 with the C++ build tools (or an equivalent MSVC developer environment).
+- CMake 3.25 or newer for the supported presets. The native Visual Studio 2026 preset requires CMake 4.2 or newer.
+- Git, including submodule support.
+- Network access during initial dependency acquisition.
 
-cmake --preset windows-msvc            # or: windows-ninja, from a VS developer prompt
+### Default build
+
+```powershell
+git clone --recursive https://github.com/slightlyoutofphase/PlaceboEngineFramework.git
+cd PlaceboEngineFramework
+
+cmake --preset windows-msvc
 cmake --build --preset windows-msvc-release
 ```
 
-The DLL lands in `build/windows-msvc/Release/PlaceboEngineFramework.dll`.
+The default preset uses **Ninja Multi-Config** with MSVC. The expected Release output location is:
 
-Notes for the impatient:
-
-- CommonLibSSE-NG is consumed **as a git submodule** (`extern/CommonLibSSE-NG`, branch
-  `ng`). `git submodule update --init --recursive` is mandatory — the recursive step
-  fetches its `openvr` submodule.
-- Compiling CommonLibSSE from source takes a while. For a fast first build you may set
-  `COMMONLIB_PREBUILT=1` (when the submodule is pinned to a clean release tag) to link
-  the published prebuilt bundle instead — no vcpkg required either way. See
-  `extern/CommonLibSSE-NG/PREBUILT.md`.
-- The `marketing_parity` target runs on every build and fails the build if the three
-  profiles ever diverge. Product requirements belong in the build system, not in a
-  wiki page someone will forget to update.
-
-### Project layout
-
+```text
+build/windows-msvc-ninja-multi/Release/PlaceboEngineFramework.dll
 ```
-├── CMakeLists.txt              plugin target via add_commonlibsse_plugin()
-├── CMakePresets.json           windows-msvc / windows-ninja
-├── cmake/Dependencies.cmake    spdlog + DirectXTK + rapidcsv, fetched, no vcpkg
-├── extern/CommonLibSSE-NG/     submodule (branch ng)
-├── resources/                  the INI, three identical profiles, Null Core
+
+Additional presets are available in `CMakePresets.json` for native Visual Studio 2022/2026 projects and single-configuration Ninja builds.
+
+CommonLibSSE-NG is a Git submodule at `extern/CommonLibSSE-NG/`. If the repository was cloned without `--recursive`, initialize it with:
+
+```powershell
+git submodule update --init --recursive
+```
+
+The recursive step is necessary for CommonLibSSE-NG's nested dependencies, including OpenVR. The `marketing_parity` target runs as part of the default build to verify that all three configuration profiles remain identical. Release engineering takes this requirement seriously.
+
+### Project structure
+
+```text
+├── CMakeLists.txt                 Build configuration and plugin target
+├── CMakePresets.json              MSVC and Ninja build presets
+├── cmake/Dependencies.cmake       Third-party dependency resolution
+├── extern/CommonLibSSE-NG/        Cross-runtime engine library (submodule)
+├── resources/
+│   ├── PlaceboEngineFramework.ini Default configuration
+│   ├── profiles/                  Three equivalent operating profiles
+│   └── null-core/                 Mandatory dependency manifest
 └── src/
-    ├── Main.cpp                the load entry point — the only exported function
-    ├── Plugin.cpp              lifetime orchestration
-    ├── BuildInfo.hpp           identity constants, including the budget (47)
-    ├── Audit/AuditThread.*     Operational Integrity loop (std::jthread)
-    ├── Config/Settings.*       INI parsing, validation, acknowledgment
-    ├── Crash/AlibiHandler.*    priority-1 vectored exception handler
-    ├── Diagnostics/            logging facade, atomic telemetry
-    ├── Hooks/                  scanner, witness slots, installer
-    └── Report/ReportWriter.*   PEF_Report.txt / PEF_Incident.txt
+    ├── Main.cpp                   SKSE entry point
+    ├── Plugin.cpp                 Initialization and lifecycle
+    ├── BuildInfo.hpp              Version and instrumentation budget
+    ├── Audit/                     Operational Integrity thread
+    ├── Config/                    INI parsing and validation
+    ├── Crash/                     Exception monitoring and alibi filing
+    ├── Diagnostics/               Logging and telemetry
+    ├── Hooks/                     Call-site discovery and witness installation
+    └── Report/                    Status and incident reporting
 ```
 
-### Engineering notes (the part other pages put under "Performance")
+### Engineering notes
 
-- **Memory ordering, pedantically applied.** Statistics counters use relaxed ordering —
-  they are numbers, not synchronization. The `operations_performed` counter uses
-  release on the (never-taken) write path and acquire on every audit read, so that when
-  the impossible happens, the incident report can name the exact line that broke the
-  product's one promise.
-- **False sharing is accounted for.** Every witness slot's statics are padded to a cache
-  line (`std::hardware_destructive_interference_size`), because inflating the overhead
-  we are contractually obligated to report honestly would be self-defeating even by
-  this project's standards.
-- **The crash handler is written to a crashing-thread discipline.** No locks, no heap,
-  no spdlog — its sinks take mutexes, and a mutex on a dying thread is how one crash
-  becomes two. The alibi is rendered into a stack buffer and written with one
-  `CreateFileW` / `WriteFile` / `CloseHandle`.
-- **Every hook is a five-byte call-site patch over a real E8 CALL.** No entry-point
-  detours, no instruction splitting: the instruction being replaced is exactly the
-  instruction the trampoline is designed to replace. Call sites are found by scanning
-  the running image, not by trusting a comment section.
-- **The plugin version lives in CMake.** `add_commonlibsse_plugin()` generates the
-  `SKSEPluginInfo` declaration from the build system, so the binary's version cannot
-  drift from the repository's. There is no second place to forget to update.
+- **Pass-through hooks.** Witness thunks call the original engine functions with the original arguments and propagate their results. They do not contain alternate gameplay implementations.
+- **Atomic telemetry.** High-frequency counters use relaxed atomic operations; the intervention counter uses release/acquire ordering to support the audit mechanism.
+- **False-sharing mitigation.** Witness state is aligned using `std::hardware_destructive_interference_size`. Monitoring nothing should not create unnecessary contention over it.
+- **Exception handling.** The alibi path avoids ordinary logging sinks and attempts a direct file write using Windows APIs. The handler always returns `EXCEPTION_CONTINUE_SEARCH`.
+- **Call-site discovery.** The installer scans the executable's code section for matching `E8 rel32` call targets and uses the SKSE trampoline to install witnesses.
+- **Versioning.** CMake provides the plugin's build version; the source maintains its report-facing version and channel designation. The `b` channel remains under active interpretation.
+
+## Changelog
+
+**4.2.0.1b** — Current release. Operational scope unchanged. Release classification expanded.
+
+**2.1** — Added the `EnablePEF` setting. Both supported values provide equivalent behavior.
+
+**2.0** — Rebuilt the framework around a revised non-intervention architecture. No change to intended gameplay outcomes.
+
+**1.2** — Reverted the previous audit-thread correction following additional review of its necessity.
+
+**1.1** — Corrected an audit-thread crash. The correction itself was subsequently reviewed for unauthorized functionality.
+
+**1.0** — Initial release. Established the baseline against which all subsequent non-interventions are measured.
 
 ## Credits
 
-- **[CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG)** — alandtse and
-  contributors: the cross-runtime (SE/AE/VR) engine library this plugin does nothing on
-  top of.
-- **SKSE team** — the script extender, the trampoline, the address library ecosystem.
-- Everyone who shipped a "Crash Guard" DLL with a changelog full of fixes for crashes
-  the previous version introduced. You were the specification.
+- [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) — alandtse and contributors.
+- The SKSE team and contributors to the Address Library ecosystem.
 
 ## License
 
-MIT — see `LICENSE`. The satire is free; the engineering is real; the two are not in
-conflict, and that was the entire point.
+MIT. See [LICENSE](LICENSE).
 
 ---
 
-*PEF — provably nothing, since last Tuesday.*
+*Placebo Engine Framework — committed to leaving well enough alone, whether or not it was well enough to begin with.*
