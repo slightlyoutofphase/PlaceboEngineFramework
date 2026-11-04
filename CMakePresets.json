@@ -1,11 +1,37 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "windows-msvc",
-      "displayName": "Windows x64 — Visual Studio 2022",
-      "description": "Standard MSVC build. No vcpkg: dependencies are fetched by CMake at configure time.",
+      "displayName": "Windows x64 — MSVC (VS 2022 or 2026, automatic)",
+      "description": "Default for Visual Studio Open Folder: Ninja uses the MSVC tools from the Visual Studio instance running CMake. No vcpkg.",
+      "generator": "Ninja Multi-Config",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "binaryDir": "${sourceDir}/build/${presetName}-ninja-multi",
+      "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RelWithDebInfo",
+        "CMAKE_CXX_COMPILER": "cl"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": [
+            "Windows"
+          ]
+        }
+      }
+    },
+    {
+      "name": "windows-vs2022",
+      "displayName": "Windows x64 — Visual Studio 2022 (native)",
+      "description": "Generate native VS 2022 projects with the VS 2022 MSVC toolset (v143).",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build/${presetName}",
@@ -14,32 +40,85 @@
       }
     },
     {
-      "name": "windows-ninja",
-      "displayName": "Windows x64 — Ninja (from a VS 2022 developer prompt)",
-      "description": "Single-config build for developer prompts. No vcpkg, same fetched dependencies.",
-      "generator": "Ninja",
+      "name": "windows-vs2026",
+      "displayName": "Windows x64 — Visual Studio 2026 (native)",
+      "description": "Generate native VS 2026 projects with its default MSVC toolset (v145). Requires CMake 4.2 or later.",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RelWithDebInfo"
+      }
+    },
+    {
+      "name": "windows-ninja",
+      "displayName": "Windows x64 — Ninja (VS 2022/2026 developer prompt)",
+      "description": "Single-config build with the installed MSVC developer environment. No vcpkg; dependencies fetched at configure time.",
+      "generator": "Ninja",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_COMPILER": "cl"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": [
+            "Windows"
+          ]
+        }
       }
     }
   ],
   "buildPresets": [
     {
       "name": "windows-msvc-release",
-      "displayName": "Release",
+      "displayName": "Release (automatic MSVC)",
       "configurePreset": "windows-msvc",
       "configuration": "Release"
     },
     {
       "name": "windows-msvc-debug",
-      "displayName": "Debug",
+      "displayName": "Debug (automatic MSVC)",
       "configurePreset": "windows-msvc",
       "configuration": "Debug"
     },
     {
+      "name": "windows-msvc-relwithdebinfo",
+      "displayName": "RelWithDebInfo (automatic MSVC)",
+      "configurePreset": "windows-msvc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "windows-vs2022-release",
+      "displayName": "Release (VS 2022 native)",
+      "configurePreset": "windows-vs2022",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2022-debug",
+      "displayName": "Debug (VS 2022 native)",
+      "configurePreset": "windows-vs2022",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-vs2026-release",
+      "displayName": "Release (VS 2026 native)",
+      "configurePreset": "windows-vs2026",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2026-debug",
+      "displayName": "Debug (VS 2026 native)",
+      "configurePreset": "windows-vs2026",
+      "configuration": "Debug"
+    },
+    {
       "name": "windows-ninja",
-      "displayName": "RelWithDebInfo",
+      "displayName": "RelWithDebInfo (Ninja developer prompt)",
       "configurePreset": "windows-ninja"
     }
   ]
