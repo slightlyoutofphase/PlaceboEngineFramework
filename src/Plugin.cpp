@@ -61,7 +61,7 @@ namespace {
 /// reports live here so that every crash-log reader in the ecosystem finds them without
 /// being asked.
 [[nodiscard]] std::filesystem::path user_directory() {
-  if (const auto logs = SKSE::log_directory()) {
+  if (const auto logs = SKSE::log::log_directory()) {
     return logs->parent_path();
   }
   return game_directory();
