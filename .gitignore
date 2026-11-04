@@ -1,0 +1,14 @@
+# Build directories and caches
+build/
+.cache/
+.vs/
+CMakeUserPresets.json
+compile_commands.json
+
+# Local tooling
+.vscode/
+.clangd/
+*.log
+
+# The prebuilt-bundle download cache used by CommonLibSSE-NG's optional fast path
+.prebuilt/

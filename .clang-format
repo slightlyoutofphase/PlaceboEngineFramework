@@ -1,0 +1,12 @@
+---
+# Placebo Engine Framework — LLVM style, two-space indent, 100-column lines.
+# The rest is stock LLVM. Two deliberate, documented deviations:
+#   - ColumnLimit 100 instead of 80: witness thunks read better with room to breathe.
+#   - PointerAlignment Left: the codebase is function-pointer-shaped, and
+#     `Ret* (*)(Args...)` beats `Ret* (* )(Args...)` in every audit we ran.
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 100
+PointerAlignment: Left
+DerivePointerAlignment: false
+InsertNewlineAtEOF: true
