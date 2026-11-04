@@ -11,7 +11,7 @@
 // includes it first, so it precedes every individual CommonLib include in this file.
 // It must also precede any Windows API include: REX/W32/BASE.h — parsed as part of this
 // umbrella — asserts that no Windows header was included before it, and
-// Crash/AlibiHandler.h (below) pulls <Windows.h> for its own types. The plugin-wide
+// Crash/AlibiHandler.hpp (below) pulls <Windows.h> for its own types. The plugin-wide
 // precompiled header force-includes the prefix ahead of every translation unit; the
 // explicit ordering keeps this file correct even where the PCH is not in play.
 #include "SKSE/SKSE.h"
